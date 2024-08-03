@@ -180,39 +180,48 @@ const postProductsToApprovedTab = async (req, res) => {
 };
 
 
-
 const postToRejectedTab = async (req, res) => {
     try {
-        // Extract itemCode from path parameter
-        const { itemCode } = req.params;
+        const { customerId } = req.params;
 
-        // Find the store document
         const store = await StoreModel.findOne();
         if (!store) {
             return res.status(404).json({ message: 'Store not found' });
         }
 
-        // Find the product in the pending tab
-        const index = store.pending.findIndex(p => p.itemCode === itemCode);
-        if (index === -1) {
-            return res.status(404).json({ message: 'Product not found in pending tab' });
+        console.log('Pending tab contents:', store.pending);
+        console.log('customerId from request:', customerId);
+
+        const customerIdNumber = Number(customerId);
+
+        const productsToMove = store.pending.filter(p => p.customerId === customerIdNumber);
+
+        if (productsToMove.length === 0) {
+            return res.status(404).json({ message: 'No products found in pending tab with the specified customerId' });
         }
 
-        // Remove the product from pending tab
-        const [product] = store.pending.splice(index, 1);
+        store.pending = store.pending.filter(p => p.customerId !== customerIdNumber);
 
-        // Add the product to rejected tab
-        store.rejected.push(product);
+        const mappedProducts = productsToMove.map(product => ({
+            salesOrderNumber: product.salesOrderId.toString(),
+            customerName: '',  // If you have customerName available, set it here
+            customerId: product.customerId,
+            orderDate: product.date,
+            totalAmount: product.totalPrice,
+            isChecked: false   // Default value or based on some logic
+        }));
 
-        // Save the updated store document
+        store.rejected.push(...mappedProducts);
+
         await store.save();
 
-        res.status(200).json({ message: `Product with item code ${itemCode} moved to rejected tab successfully` });
+        res.status(200).json({ message: `All products with customer ID ${customerId} moved to rejected tab successfully` });
     } catch (error) {
-        console.error('Error moving product to rejected tab:', error);
-        res.status(500).json({ message: 'Internal Server Error: Failed to move product to rejected tab', error: error.message });
+        console.error('Error moving products to rejected tab:', error);
+        res.status(500).json({ message: 'Internal Server Error: Failed to move products to rejected tab', error: error.message });
     }
 };
+
 
 
 const getTotalCartPrice = async (req, res) => {
@@ -390,6 +399,113 @@ const deleteSpecificProductFromPending = async (req, res) => {
   };
   
   
+  const Store = require('../models/storeModel'); 
+
+  const getAllProductsFromApproved = async (req, res) => {
+      try {
+          // Assuming your Store model has a field called "approved" which is an array of products
+          const stores = await Store.find({}, 'approved'); // Fetch only the 'approved' field
+  
+          // Extract all approved products from the stores
+          const approvedProducts = stores.flatMap(store => store.approved);
+  
+          // Return the approved products
+          return res.status(200).json({
+              success: true,
+              approvedProducts
+          });
+      } catch (error) {
+          console.error("Error fetching approved products:", error);
+          return res.status(500).json({
+              success: false,
+              message: "Failed to fetch approved products",
+              error: error.message
+          });
+      }
+  };
+  
+  const getAllProductsFromRejected = async (req, res) => {
+    try {
+      // Assuming you have a Store model and the rejected products are stored under a key 'rejected'
+      const storeData = await Store.find({}, 'rejected'); // Fetch only the 'rejected' field from all documents
+  
+      if (storeData.length > 0) {
+        res.status(200).json(storeData);
+      } else {
+        res.status(404).json({ message: 'No rejected products found' });
+      }
+    } catch (error) {
+      res.status(500).json({ message: 'Server error', error: error.message });
+    }
+  };
+  
+
+
+  //onclick save after editing in storeproduct , post the renderinglist to pending tab
+
+//   const StoreModel = require('../models/StoreModel'); // Adjust the path as necessary
+
+// const StoreModel = require('./path/to/StoreModel'); // Adjust the path as necessary
+
+const putProductsToPendingTabAfterEditing = async (req, res) => {
+    try {
+        // Extract customerId and products from request body
+        const { customerId, products } = req.body;
+
+        if (!customerId || !products || !Array.isArray(products)) {
+            return res.status(400).json({ message: 'Invalid data' });
+        }
+
+        // Find the store document
+        const store = await StoreModel.findOne();
+        if (!store) {
+            return res.status(404).json({ message: 'Store not found' });
+        }
+
+        let updated = false;
+
+        // Loop through products and update or add
+        products.forEach(product => {
+            const { itemcode, quantity, totalPrice } = product;
+
+            // Check if the product already exists for the given customerId
+            const existingProductIndex = store.pending.findIndex(p => p.customerId === customerId && p.itemCode === itemcode);
+
+            if (existingProductIndex !== -1) {
+                // Update existing product
+                store.pending[existingProductIndex].quantity = quantity;
+                store.pending[existingProductIndex].totalPrice = totalPrice; // Update totalPrice if needed
+                updated = true;
+            } else {
+                // Add new product
+                store.pending.push({
+                    itemcode,
+                    itemName: product.itemName,
+                    unitPrice: product.unitPrice,
+                    quantity,
+                    totalPrice,
+                    customerId,
+                    date: product.date
+                });
+                updated = true;
+            }
+        });
+
+        if (updated) {
+            // Save the updated store document
+            await store.save();
+        }
+
+        res.status(200).json({ message: 'Pending tab updated successfully after editing' });
+    } catch (error) {
+        console.error('Error updating pending tab after editing:', error);
+        res.status(500).json({ message: 'Internal Server Error: Failed to update pending tab after editing', error: error.message });
+    }
+};
+
+
+  
+  
   
 
 
@@ -406,3 +522,6 @@ module.exports.delteDataAfterPostToApprovedTab = delteDataAfterPostToApprovedTab
 module.exports.deleteAllProductsFromPending=deleteAllProductsFromPending
 module.exports.getPendingProductsDataOnClickEdit = getPendingProductsDataOnClickEdit
 module.exports.deleteSpecificProductFromPending = deleteSpecificProductFromPending
+module.exports.getAllProductsFromApproved = getAllProductsFromApproved;
+module.exports.getAllProductsFromRejected = getAllProductsFromRejected;
+module.exports.putProductsToPendingTabAfterEditing = putProductsToPendingTabAfterEditing 

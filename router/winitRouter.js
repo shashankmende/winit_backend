@@ -24,7 +24,7 @@ router.route('/approved_tab').post(winitController.postProductsToApprovedTab)
 
 
 //onclick delete button of individual store items in main page , it should be moved to rejected tab based on item code. i'll send item code through path parameter
-router.route('/rejected_tab/:itemCode').delete(winitController.postToRejectedTab)
+router.route('/rejected_tab/:customerId').delete(winitController.postToRejectedTab)
 
 router.route('/total_cart_amount').get(winitController.getTotalCartPrice)
 
@@ -43,6 +43,16 @@ router.route("/pending_products/:customerId").get(winitController.getPendingProd
 //onclick delete in main page of specific store ,that store should be deleted from
 //pending tab
 router.route("/delete_specific_pending/:customerId").delete(winitController.deleteSpecificProductFromPending)
+
+//get all products from approvedtab
+router.route("/all_approved_products").get(winitController.getAllProductsFromApproved)
+
+//get all products from rejectedtab
+router.route('/all_products_rejected').get(winitController.getAllProductsFromRejected)
+
+//onclick save after editing in storedProducts page
+router.route('/save_after_edit').put(winitController.putProductsToPendingTabAfterEditing)
+
 
 
 module.exports = router;
