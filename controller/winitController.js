@@ -149,51 +149,36 @@ const postProductsToPendingTab = async (req, res) => {
 
 const postProductsToApprovedTab = async (req, res) => {
     try {
-        
         const products = req.body;
 
-        
         if (!Array.isArray(products)) {
             return res.status(400).json({ message: 'Invalid input: products should be an array' });
         }
 
-        
-        const store = await StoreModel.findOne();
-        if (!store) {
+        // Extract the IDs of the products to move
+        const productIds = products.map(p => p._id);
+
+        // Find and update the document
+        const result = await StoreModel.findOneAndUpdate(
+            {}, // Query to find the document (e.g., by ID or other criteria)
+            {
+                $push: { approved: { $each: products } }, // Add products to approved tab
+                $pull: { pending: { _id: { $in: productIds } } } // Remove products from pending tab
+            },
+            { new: true } // Return the updated document
+        );
+
+        if (!result) {
             return res.status(404).json({ message: 'Store not found' });
         }
 
-        
-        const approvedProducts = [];
-        const pendingProductsToRemove = [];
-
-        products.forEach(product => {
-            const index = store.pending.findIndex(p => p.itemCode === product.itemCode);
-
-            if (index !== -1) {
-                
-                approvedProducts.push(store.pending[index]);
-                
-                
-                pendingProductsToRemove.push(index);
-            }
-        });
-
-        
-        pendingProductsToRemove.reverse().forEach(index => store.pending.splice(index, 1));
-
-        
-        store.approved.push(...approvedProducts);
-
-        
-        await store.save();
-
-        res.status(200).json({ message: 'Products moved to approved tab successfully' });
+        res.status(200).json({ message: 'Products moved to approved tab successfully', result });
     } catch (error) {
         console.error('Error moving products to approved tab:', error);
         res.status(500).json({ message: 'Internal Server Error: Failed to move products to approved tab', error: error.message });
     }
 };
+
 
 
 const postToRejectedTab = async (req, res) => {
@@ -290,7 +275,122 @@ const getTableData = async (req, res) => {
 };
 
 
+const delteDataAfterPostToApprovedTab = async (req, res) => {
+    try {
+        // Ensure that the request body contains an array of items
+        const items = req.body; // Directly assuming req.body is an array of objects
 
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'Invalid input: expected an array of objects.' });
+        }
+
+        // Extract customer IDs from the items array
+        const customerIds = items.map(item => item.customerId);
+
+        // Update the Store model to remove products from the pending array
+        await StoreModel.updateMany(
+            { "pending.customerId": { $in: customerIds } },
+            { $pull: { pending: { customerId: { $in: customerIds } } } }
+        );
+
+        res.status(200).json({ message: 'Items successfully removed from pending tab' });
+    } catch (error) {
+        console.error('Error removing items from pending tab:', error);
+        res.status(500).json({ error: 'Failed to remove items from pending tab' });
+    }
+};
+
+
+
+const deleteAllProductsFromPending = async (req, res) => {
+    const { customerId } = req.params; // Assuming customerId is passed as a path parameter
+
+    try {
+        // Find the store document(s) that contain the pending items for the given customerId
+        const result = await Store.updateMany(
+            { "pending.customerId": customerId }, // Filter by customerId in the pending array
+            { $pull: { pending: { customerId } } } // Remove all items with the given customerId
+        );
+
+        if (result.modifiedCount > 0) {
+            return res.status(200).json({ message: 'Products successfully deleted from pending tab.' });
+        } else {
+            return res.status(404).json({ message: 'No pending products found for the given customer ID.' });
+        }
+    } catch (error) {
+        console.error('Error deleting products from pending tab:', error);
+        return res.status(500).json({ message: 'Internal server error.' });
+    }
+}
+
+
+const getPendingProductsDataOnClickEdit = async (req, res) => {
+    try {
+        const { customerId } = req.params;
+        console.log("Received customerId:", customerId); // Log customerId
+        
+        // Convert customerId to number if it's stored as a number in the database
+        const customerIdNumber = parseInt(customerId, 10);
+        
+        // Find the store document
+        const store = await StoreModel.findOne(); // Adjust this query if necessary
+        if (!store) {
+            return res.status(404).json({ message: "Store data not found" });
+        }
+
+        console.log("Store document:", store); // Log the whole store document
+
+        // Check if pending is an array
+        if (!Array.isArray(store.pending)) {
+            return res.status(500).json({ message: "Pending data is not an array" });
+        }
+
+        // Filter the pending products based on customerId
+        const pendingProducts = store.pending.filter(product => product.customerId === customerIdNumber);
+        console.log("Pending products:", pendingProducts); // Log the pending products
+
+        return res.status(200).json({ pendingProducts });
+    } catch (error) {
+        console.error("Error fetching pending products:", error);
+        return res.status(500).json({ message: "Server error" });
+    }
+};
+
+
+const deleteSpecificProductFromPending = async (req, res) => {
+    try {
+      const { customerId } = req.params;
+  
+      // Find the store document where an item in pending matches the given customerId
+      const store = await StoreModel.findOne({ "pending.customerId": customerId });
+  
+      if (!store) {
+        return res.status(404).json({ message: "No products found for the given customer ID" });
+      }
+  
+      console.log("Store found:", store);
+  
+      // Filter out the product with the matching customerId
+      const initialLength = store.pending.length;
+      store.pending = store.pending.filter(product => product.customerId !== parseInt(customerId));
+  
+      if (initialLength === store.pending.length) {
+        return res.status(404).json({ message: "Product not found for the given customer ID" });
+      }
+  
+      // Save the updated store document
+      const savedStore = await store.save();
+      console.log("Store saved:", savedStore);
+  
+      res.status(200).json({ message: "Product deleted successfully", store: savedStore });
+    } catch (error) {
+      console.error("Error deleting specific product from pending:", error);
+      res.status(500).json({ message: "Internal server error." });
+    }
+  };
+  
+  
+  
 
 
 module.exports.testRoute =testRoute
@@ -302,3 +402,7 @@ module.exports.postProductsToApprovedTab = postProductsToApprovedTab
 module.exports.postToRejectedTab = postToRejectedTab
 module.exports.getTotalCartPrice = getTotalCartPrice
 module.exports.getTableData = getTableData
+module.exports.delteDataAfterPostToApprovedTab = delteDataAfterPostToApprovedTab
+module.exports.deleteAllProductsFromPending=deleteAllProductsFromPending
+module.exports.getPendingProductsDataOnClickEdit = getPendingProductsDataOnClickEdit
+module.exports.deleteSpecificProductFromPending = deleteSpecificProductFromPending

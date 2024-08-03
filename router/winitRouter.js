@@ -32,5 +32,17 @@ router.route('/total_cart_amount').get(winitController.getTotalCartPrice)
 
 router.route('/table_data').get(winitController.getTableData)
 
+//delete products from pending tab after moving them to approved tab
+router.route('/delete_approved_data').delete(winitController.delteDataAfterPostToApprovedTab)
+
+router.route('/delete_all_products_pending').delete(winitController.deleteAllProductsFromPending)
+
+//onclick edit in pendingtab send customerid and get the products and assign to products
+router.route("/pending_products/:customerId").get(winitController.getPendingProductsDataOnClickEdit)
+
+//onclick delete in main page of specific store ,that store should be deleted from
+//pending tab
+router.route("/delete_specific_pending/:customerId").delete(winitController.deleteSpecificProductFromPending)
+
 
 module.exports = router;
