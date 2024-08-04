@@ -258,18 +258,21 @@ const getTableData = async (req, res) => {
         const customerSummary = {};
 
         store.pending.forEach(product => {
-            const { customerId, totalPrice, date } = product;
+            const { customerId, date, unitPrice, quantity } = product;
+            const total = unitPrice * quantity;
 
             if (!customerSummary[customerId]) {
                 customerSummary[customerId] = {
                     customerId: customerId,
                     orderDate: date,
-                    totalAmount: 0
+                    totalAmount: total, // Initialize totalAmount with the first product's total
+                    unitPrice,
+                    quantity
                 };
+            } else {
+                customerSummary[customerId].totalAmount += total; // Accumulate totalAmount
+                customerSummary[customerId].orderDate = date; // Update with the latest date
             }
-
-            customerSummary[customerId].totalAmount += totalPrice;
-            customerSummary[customerId].orderDate = date; // Update with the latest date
         });
 
         // Convert the summary object to an array
@@ -282,6 +285,7 @@ const getTableData = async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error: Failed to get table data', error: error.message });
     }
 };
+
 
 
 const delteDataAfterPostToApprovedTab = async (req, res) => {
@@ -441,11 +445,7 @@ const deleteSpecificProductFromPending = async (req, res) => {
   
 
 
-  //onclick save after editing in storeproduct , post the renderinglist to pending tab
 
-//   const StoreModel = require('../models/StoreModel'); // Adjust the path as necessary
-
-// const StoreModel = require('./path/to/StoreModel'); // Adjust the path as necessary
 
 const putProductsToPendingTabAfterEditing = async (req, res) => {
     try {
@@ -504,6 +504,32 @@ const putProductsToPendingTabAfterEditing = async (req, res) => {
 };
 
 
+const popProductsBasedOnCustomerIdAndInsertNewBody = async (req, res) => {
+    const { customerId } = req.params; 
+    const newProducts = req.body;      
+    
+    try {
+        const store = await StoreModel.findOne();
+
+        if (!store) {
+            return res.status(404).json({ message: 'Store not found' });
+        }
+
+        store.pending = store.pending.filter(product => product.customerId !== Number(customerId));
+
+        store.pending.push(...newProducts);
+
+        await store.save();
+
+        res.status(200).json({ message: 'Products updated successfully', store });
+    } catch (error) {
+        console.error('Error updating products:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+
+
   
   
   
@@ -525,3 +551,4 @@ module.exports.deleteSpecificProductFromPending = deleteSpecificProductFromPendi
 module.exports.getAllProductsFromApproved = getAllProductsFromApproved;
 module.exports.getAllProductsFromRejected = getAllProductsFromRejected;
 module.exports.putProductsToPendingTabAfterEditing = putProductsToPendingTabAfterEditing 
+module.exports.popProductsBasedOnCustomerIdAndInsertNewBody = popProductsBasedOnCustomerIdAndInsertNewBody

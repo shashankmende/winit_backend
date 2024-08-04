@@ -53,6 +53,9 @@ router.route('/all_products_rejected').get(winitController.getAllProductsFromRej
 //onclick save after editing in storedProducts page
 router.route('/save_after_edit').put(winitController.putProductsToPendingTabAfterEditing)
 
-
+//onclick save in storeproduct component
+//popup the products with the give customerid
+//from pending tabs and insert the new body in that place
+router.route('/save_changes_to_pending_after_edit/:customerId').put(winitController.popProductsBasedOnCustomerIdAndInsertNewBody)
 
 module.exports = router;
